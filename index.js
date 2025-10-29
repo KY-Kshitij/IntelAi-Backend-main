@@ -53,9 +53,12 @@ serverConnect();
 app.post("/api/login", async(req, res)=>{
   const {email, password} = req.body;
   try {
-    const user = await User.findOne({email});
+    // Normalize email to lowercase for consistent handling
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    const user = await User.findOne({email: normalizedEmail});
     if(!user){
-      return res.status(404).json({message:"User not found "});
+      return res.status(404).json({message:"No account found with this email address"});
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
@@ -80,24 +83,31 @@ app.post("/api/login", async(req, res)=>{
 app.post("/api/signup", async (req, res) => {
   const { name, email, password } = req.body;
   try {
-    const existingUser = await User.findOne({ email });
+    // Normalize email to lowercase for consistent handling
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Check for existing user with normalized email
+    const existingUser = await User.findOne({ email: normalizedEmail });
 
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({ message: "User already exists with this email address" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
       name,
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
     });
 
     const savedUser = await newUser.save();
 
+    const token = jwt.sign({ id: savedUser._id, email: savedUser.email }, process.env.JWT_SECRET, { expiresIn: "24h" });
+
     res.status(201).json({
       message: "Signup successful",
+      token,
       user: {
         id: savedUser._id,
         email: savedUser.email,
@@ -277,7 +287,10 @@ app.put("/api/userProfile", authMiddleware, async (req, res) => {
 app.post('/api/forgot-password', async(req, res)=>{
   const {email, password}=req.body;
   try {
-    const user = await User.findOne({email});
+    // Normalize email to lowercase for consistent handling
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    const user = await User.findOne({email: normalizedEmail});
     if(!user){
       return res.status(404).json({message:`No user registered with ${email}`});
     }
